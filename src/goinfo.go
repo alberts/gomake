@@ -8,9 +8,11 @@ import (
 	"fmt"
 	"go/ast"
 	"go/parser"
+	"go/token"
 	"opts"
 	"os"
 	"path"
+	"path/filepath"
 	"strings"
 )
 
@@ -33,7 +35,7 @@ func main() {
 	}
 	// if there are no files, generate a list
 	if len(opts.Args) == 0 {
-		path.Walk(".", GoFileFinder{}, nil)
+		filepath.Walk(".", GoFileFinder{}, nil)
 	} else {
 		for _, fname := range opts.Args {
 			files.Push(fname)
@@ -60,14 +62,16 @@ var packages = map[string]*struct{}{}
 
 func GetPackageList() {
 	for _, fname := range files {
-		file, err := parser.ParseFile(fname, nil, parser.PackageClauseOnly)
+		fset := token.NewFileSet()
+		file, err := parser.ParseFile(fset, fname, nil, parser.PackageClauseOnly)
 		if err != nil {
 			fmt.Fprint(os.Stderr, err)
 			os.Exit(1)
 		}
 		pname := file.Name.Name
 		if pname == "main" {
-			fullfile, err := parser.ParseFile(fname, nil, 0)
+			fset := token.NewFileSet()
+			fullfile, err := parser.ParseFile(fset, fname, nil, 0)
 			if err == nil {
 				v := &MainCheckVisitor{fname: fname}
 				ast.Walk(v, fullfile)
@@ -91,7 +95,7 @@ type MainCheckVisitor struct {
 	hasMain bool
 }
 
-func (v *MainCheckVisitor) Visit(node interface{}) ast.Visitor {
+func (v *MainCheckVisitor) Visit(node ast.Node) ast.Visitor {
 	if decl, ok := node.(*ast.FuncDecl); ok {
 		if decl.Name.Name == "main" {
 			v.hasMain = true
@@ -103,7 +107,7 @@ func (v *MainCheckVisitor) Visit(node interface{}) ast.Visitor {
 // Print list of packages
 func PrintPList() {
 	fmt.Print("GOPKGS = ")
-	for pname, _ := range packages {
+	for pname := range packages {
 		fmt.Printf("%s ", mkRoot(pname))
 	}
 	fmt.Print("\n")

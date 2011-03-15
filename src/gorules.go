@@ -25,7 +25,7 @@ func main() {
 	}
 	PrintAutoNotice()
 	fmt.Print(
-		`
+`
 .go.${O}:
         ${GC} $*.go
 

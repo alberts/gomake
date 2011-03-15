@@ -9,9 +9,11 @@ import (
 	"fmt"
 	"go/ast"
 	"go/parser"
+	"go/token"
 	"opts"
 	"os"
 	"path"
+	"path/filepath"
 	"strings"
 )
 
@@ -39,7 +41,7 @@ func main() {
 	}
 	// if there are no files, generate a list
 	if len(opts.Args) == 0 {
-		path.Walk(".", GoFileFinder{}, nil)
+		filepath.Walk(".", GoFileFinder{}, nil)
 	} else {
 		for _, fname := range opts.Args {
 			files.Push(fname)
@@ -47,7 +49,8 @@ func main() {
 	}
 	// for each file, list dependencies
 	for _, fname := range files {
-		file, err := parser.ParseFile(fname, nil, parser.ImportsOnly)
+		fset := token.NewFileSet()
+		file, err := parser.ParseFile(fset, fname, nil, parser.ImportsOnly)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "%s\n", err)
 			os.Exit(1)
@@ -81,7 +84,8 @@ func FindMain() {
 	// for each file in the main package
 	if pkg, ok := packages["main"]; ok {
 		for _, fname := range *pkg.files {
-			file, _ := parser.ParseFile(fname, nil, 0)
+			fset := token.NewFileSet()
+			file, _ := parser.ParseFile(fset, fname, nil, 0)
 			ast.Walk(&MainCheckVisitor{fname}, file)
 		}
 	}
@@ -191,7 +195,7 @@ type ImportVisitor struct {
 	pkg Package
 }
 
-func (v ImportVisitor) Visit(node interface{}) ast.Visitor {
+func (v ImportVisitor) Visit(node ast.Node) ast.Visitor {
 	// check the type of the node
 	if spec, ok := node.(*ast.ImportSpec); ok {
 		ppath := path.Clean(strings.Trim(string(spec.Path.Value), "\""))
@@ -219,7 +223,7 @@ func addRoot(filename string) {
 	roots[filename] = basename
 }
 
-func (v MainCheckVisitor) Visit(node interface{}) ast.Visitor {
+func (v MainCheckVisitor) Visit(node ast.Node) ast.Visitor {
 	if decl, ok := node.(*ast.FuncDecl); ok {
 		if decl.Name.Name == "main" {
 			addRoot(v.fname)
